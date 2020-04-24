@@ -2,7 +2,7 @@ import json
 import sqlite3
 from itertools import count
 import plotly.graph_objects as go
-
+import pandas as pd
 
 from bs4 import BeautifulSoup
 import requests
@@ -13,6 +13,7 @@ STATS_URL = 'stats/lacrosse-women/d1'
 CACHE_FILENAME = "allcache.json"
 CACHE_DICT = {}
 DBNAME = 'womenslax.sqlite'
+
 
 def open_cache():
     try:
@@ -30,6 +31,7 @@ def save_cache(cache_dict):
     fw = open(CACHE_FILENAME, "w")
     fw.write(dumped_json_cache)
     fw.close()
+
 
 def get_url_team():
     rank_page = BASE_URL + RANK_URL
@@ -129,6 +131,88 @@ def create_player_lists(stat):
     return players
 
 
+def merge_lists():
+    team_info = get_team_data()
+    complete_list = []
+    fblanks = [" ", " ", " ", " ", " "]
+    field_players = create_player_lists('Points')
+    for each_list in field_players:
+        f_complete_list = each_list + fblanks
+        complete_list.append(f_complete_list)
+
+    defence = create_player_lists('Save Percentage')
+    dblanks = [" ", " ", " "]
+    for each_list in defence:
+        d_complete_list = each_list[:4] + dblanks + each_list[4:]
+        complete_list.append(d_complete_list)
+    return complete_list
+
+
+def init_data(team_info, complete_list):
+    connection = sqlite3.connect(DBNAME)
+    cur = connection.cursor()
+
+    drop_teams = """
+            DROP TABLE IF EXISTS "Teams";
+
+        """
+
+    create_teams = """
+            CREATE TABLE IF NOT EXISTS "Teams" (
+                "Rank" INTEGER  ,
+                "School" TEXT PRIMARY KEY, 
+                "Conference" TEXT 
+                );
+        """
+
+    drop_players = """
+           DROP TABLE IF EXISTS "Players";
+
+        """
+
+    create_players = """
+            CREATE TABLE IF NOT EXISTS "Players" (
+                "Player" TEXT,
+                "School" TEXT,
+                "Class" TEXT,
+                "Field Position" TEXT, 
+                "Games" INTEGER,
+                "Goals" INTEGER,
+                "Assists" INTEGER,
+                "Points" INTEGER,
+                "Minutes Played" INTEGER,
+                "Team Minutes" INTEGER,
+                "Goals Allowed" INTEGER,
+                "Saves" INTEGER,
+                "Save Percent" INTEGER 
+                );
+        """
+    cur.execute(drop_teams)
+    cur.execute(create_teams)
+    cur.execute(drop_players)
+    cur.execute(create_players)
+
+    connection.commit()
+
+    insert_players = """
+                          INSERT INTO Players
+                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  """
+
+    for player in complete_list:
+        cur.execute(insert_players, player)
+
+    insert_teams = """
+                    INSERT INTO Teams
+                    VALUES (?, ?, ?)
+                """
+
+    for team in team_info:
+        cur.execute(insert_teams, team)
+
+    connection.commit()
+
+
 def parse_query_params(command):
     params = ['command', 'team_name', 'team_conference', 'order-direction', 'limit', 'plot']
     defaults = ['rank', 'team', 'conference', 'top', 10, None]
@@ -207,7 +291,7 @@ def print_cmd_result(result):
         new_line = []
 
         for item in line:
-            if str(item).isnumeric() and float(item) > 0 :
+            if str(item).isnumeric() and float(item) > 0:
                 new_item = '{0:d}'.format(item)
                 new_item = new_item.ljust(4)
             else:
@@ -223,8 +307,8 @@ def plot_results(result, query_dict):
         y_vals = [line[1] for line in result]
 
     elif query_dict['command'] == 'team_points':
-        x_vals= [line[1] for line in result]
-        y_vals= [line[2] for line in result]
+        x_vals = [line[1] for line in result]
+        y_vals = [line[2] for line in result]
 
 
     elif query_dict['command'] == 'player_points':
@@ -239,7 +323,6 @@ def plot_results(result, query_dict):
 
     fig = go.Figure(go.Bar(x=x_vals, y=y_vals))
     fig.show()
-
 
 
 def process_command(command):
@@ -283,90 +366,12 @@ def interactive_prompt():
         else:
             print('Sorry your command is not recognized')
 
+
 if __name__ == '__main__':
-    open_cache()
-    get_url_team()
-    get_url_player()
-    get_url_two()
-    team_info = get_team_data()
-    print(team_info[1:])
-    complete_list = []
-    fblanks = [" ", " ", " ", " ", " "]
-    field_players = create_player_lists('Points')
-    for each_list in field_players:
-        f_complete_list = each_list + fblanks
-        complete_list.append(f_complete_list)
-
-    defence = create_player_lists('Save Percentage')
-    dblanks = [" ", " ", " "]
-    for each_list in defence:
-        d_complete_list = each_list[:4] + dblanks + each_list[4:]
-        complete_list.append(d_complete_list)
-    print(complete_list)
-
-    connection = sqlite3.connect(DBNAME)
-    cur = connection.cursor()
-
-    drop_teams = """
-        DROP TABLE IF EXISTS "Teams";
-
-    """
-
-    create_teams = """
-        CREATE TABLE IF NOT EXISTS "Teams" (
-            "Rank" INTEGER  ,
-            "School" TEXT PRIMARY KEY, 
-            "Conference" TEXT 
-            );
-    """
-
-    drop_players = """
-       DROP TABLE IF EXISTS "Players";
-    
-    """
-
-    create_players = """
-        CREATE TABLE IF NOT EXISTS "Players" (
-            "Player" TEXT,
-            "School" TEXT,
-            "Class" TEXT,
-            "Field Position" TEXT, 
-            "Games" INTEGER,
-            "Goals" INTEGER,
-            "Assists" INTEGER,
-            "Points" INTEGER,
-            "Minutes Played" INTEGER,
-            "Team Minutes" INTEGER,
-            "Goals Allowed" INTEGER,
-            "Saves" INTEGER,
-            "Save Percent" INTEGER 
-            );
-    """
-    cur.execute(drop_teams)
-    cur.execute(create_teams)
-    cur.execute(drop_players)
-    cur.execute(create_players)
-
-    connection.commit()
-
-    insert_players = """
-                      INSERT INTO Players
-                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-              """
-
-    for player in complete_list:
-        cur.execute(insert_players, player)
+    init_data(get_team_data(), merge_lists())
+    interactive_prompt()
 
 
 
-    insert_teams = """
-                INSERT INTO Teams
-                VALUES (?, ?, ?)
-            """
-
-    for team in team_info:
-        cur.execute(insert_teams, team)
-
-    connection.commit()
 
 
