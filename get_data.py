@@ -6,7 +6,7 @@ import requests
 BASE_URL = 'https://www.ncaa.com/'
 RANK_URL = 'rankings/lacrosse-women/d1/ncaa-womens-lacrosse-rpi'
 STATS_URL = 'stats/lacrosse-women/d1'
-CACHE_FILENAME = "laxcache.json"
+CACHE_FILENAME = "cache.json"
 CACHE_DICT = {}
 DBNAME = 'womenslax.sqlite'
 
