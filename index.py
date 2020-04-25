@@ -2,7 +2,7 @@ import subprocess
 import sys
 
 interact = [sys.executable, 'aepeash_final.py']
-refresh = [sys.executable, 'getplayerdata.py']
+refresh = [sys.executable, 'get_data.py']
 
 
 def interactive_prompt():
