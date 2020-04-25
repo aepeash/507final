@@ -44,6 +44,11 @@ def parse_query_params(command):
 
     return query_dict
 
+def convert_to_number(connection, cursor, sql):
+    connection = sqlite3.connect(DBNAME)
+    all_results = connection.cursor()
+    pass
+
 
 def build_sql_from_dict(query_dict):
     columns = ''
@@ -62,38 +67,45 @@ def build_sql_from_dict(query_dict):
     order_by = ''
 
     if query_dict['order_direction'] == 'top':
-        order_direction = 'ASC'
-    else:
         order_direction = 'DESC'
+    else:
+        order_direction = 'ASC'
 
     limit = f"\nLIMIT {query_dict['limit']}"
 
     if query_dict['command'] == 'rank':
+        if query_dict['order_direction'] == 'top':
+            order_direction = 'ASC'
+        else:
+            order_direction = 'DESC'
+
         columns = '[Rank], t.School, Conference'
         group_by = f'\n GROUP BY t.School'
         order_by = f'\n ORDER BY [rank] {order_direction}'
 
 
     elif query_dict['command'] == 'team_points':
-        columns = 't.[rank], t.School, sum(p.Points), sum(p.Goals), sum(p.Assists)'
+        columns = 't.[rank], t.School, round(sum(p.Points), 0), round(sum(p.Goals), 0), round(sum(p.Assists), 0)'
         group_by = f'\n GROUP BY t.School'
-        order_by = f'\n ORDER BY t.[rank] {order_direction}'
+        having = f'\n HAVING sum(p.Points) <> 0'
+        order_by = f'\n ORDER BY sum(p.Points) {order_direction}'
 
     elif query_dict['command'] == 'player_points':
-        columns = 'Player, t.School, p.Points, Goals, Assists'
-        where = f"\n WHERE Points is not ' '"
-        order_by = f'\nORDER BY {order_direction}'
+        columns = 'Player, t.School, p.points, goals, assists'
+        where = f"\n WHERE points <> 'N/A'"
+        order_by = f'\nORDER BY p.points {order_direction}'
 
 
     elif query_dict['command'] == 'team_saves':
-        columns = 't.[rank], t.School, sum(saves)'
+        columns = 't.[rank], t.School, round(sum(saves), 0)'
         group_by = f'\n GROUP BY t.School'
-        order_by = f'\n ORDER BY t.[rank] {order_direction}'
+        having = f'\n HAVING round(sum(saves), 0) <> 0'
+        order_by = f'\n ORDER BY round(sum(saves), 0) {order_direction}'
 
     elif query_dict['command'] == 'player_saves':
-        columns = 'Player, t.School, Saves, [save percent]'
-        where = f"\n WHERE Saves is not  ' ' "
-        order_by = f'\n ORDER BY Saves {order_direction}'
+        columns = 'Player, t.School, CAST(Saves as INT) as save, [save_percent]'
+        where = f"\n WHERE Save <> 0 "
+        order_by = f'\n ORDER BY Save {order_direction}'
 
     query = f"SELECT {columns} {from_clause} {where} {group_by} {having} {order_by} {limit}"
 
@@ -102,7 +114,6 @@ def build_sql_from_dict(query_dict):
 
 def execute_sql(connection, cursor, sql):
     result = cursor.execute(sql).fetchall()
-
     return result
 
 
@@ -112,7 +123,7 @@ def print_cmd_result(result):
 
         for item in line:
             if str(item).isnumeric() and float(item) > 0:
-                new_item = '{0:d}'.format(item)
+                new_item = '{0:.0f}'.format(float(item))
                 new_item = new_item.ljust(4)
             else:
                 new_item = str(item).ljust(30)
@@ -183,7 +194,6 @@ def player_plot(result, query_dict):
                              marker_color='rgb(255,203,5)'))
     fig.update_layout(barmode='stack', title="Points", xaxis={'categoryorder': 'category ascending'})
     fig.show()
-
 
 
 def process_command(command):
