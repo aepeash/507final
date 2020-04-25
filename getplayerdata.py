@@ -1,9 +1,5 @@
 import json
 import sqlite3
-from itertools import count
-import plotly.graph_objects as go
-import pandas as pd
-
 from bs4 import BeautifulSoup
 import requests
 
@@ -134,21 +130,29 @@ def create_player_lists(stat):
 def merge_lists():
     team_info = get_team_data()
     complete_list = []
-    fblanks = [" ", " ", " ", " ", " "]
+    fblanks = [" ", " ", " ", " ", " ", " "]
     field_players = create_player_lists('Points')
     for each_list in field_players:
         f_complete_list = each_list + fblanks
         complete_list.append(f_complete_list)
 
     defence = create_player_lists('Save Percentage')
-    dblanks = [" ", " ", " "]
+    dblanks = [" ", " ", " ", " "]
     for each_list in defence:
         d_complete_list = each_list[:4] + dblanks + each_list[4:]
         complete_list.append(d_complete_list)
     return complete_list
 
 
-def init_data(team_info, complete_list):
+
+if __name__ == '__main__':
+    open_cache()
+    get_url_team()
+    get_url_player()
+    get_url_two()
+    complete_list = merge_lists()
+    team_info = get_team_data()
+
     connection = sqlite3.connect(DBNAME)
     cur = connection.cursor()
 
@@ -180,6 +184,7 @@ def init_data(team_info, complete_list):
                 "Goals" INTEGER,
                 "Assists" INTEGER,
                 "Points" INTEGER,
+                "Games Played" INTEGER,
                 "Minutes Played" INTEGER,
                 "Team Minutes" INTEGER,
                 "Goals Allowed" INTEGER,
@@ -196,7 +201,7 @@ def init_data(team_info, complete_list):
 
     insert_players = """
                           INSERT INTO Players
-                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                   """
 
     for player in complete_list:
@@ -212,164 +217,6 @@ def init_data(team_info, complete_list):
 
     connection.commit()
 
-
-def parse_query_params(command):
-    params = ['command', 'team_name', 'team_conference', 'order-direction', 'limit', 'plot']
-    defaults = ['rank', 'team', 'conference', 'top', 10, None]
-    query_dict = dict(zip(params, defaults))
-
-    cmd_list = command.split(' ')
-
-    for cmd in cmd_list:
-        if cmd in ('rank', 'team_points', 'player_points', 'saves'):
-            query_dict['command'] = cmd
-
-        elif cmd in ('top', 'bottom'):
-            query_dict['order_direction'] = cmd
-
-        elif cmd.isnumeric() and (float(cmd) > 0):
-            query_dict['limit'] = cmd
-
-        elif cmd == 'barplot':
-            query_dict['plot'] = cmd
-
-    return query_dict
-
-
-def build_sql_from_dict(query_dict):
-    columns = ''
-
-    from_clause = '''
-    from Teams t
-    JOIN Players p 
-    on t.School = p.School
-    '''
-
-    from_clause = from_clause.replace('  ', '')
-
-    where = ''
-    group_by = ''
-    having = ''
-    order_by = ''
-
-    if query_dict['order-direction'] == 'top':
-        order_direction = 'DESC'
-    else:
-        order_direction = 'ASC'
-
-    limit = f"\nLIMIT {query_dict['limit']}"
-
-    if query_dict['command'] == 'rank':
-        columns = 'Rank, t.School, Conference'
-
-    elif query_dict['command'] == 'team_points':
-        columns = 't.[rank], t.School, sum(p.Points), sum(p.Goals), sum(p.Assists)'
-        group_by = f'\n GROUP BY t.School'
-        order_by = f'\n ORDER BY t.rank {order_direction}'
-
-    elif query_dict['command'] == 'player_points':
-        columns = 'Player, t.School, p.Points, Goals, Assists'
-        where = f"\n WHERE Points is not ' '"
-
-    elif query_dict['command'] == 'saves':
-        columns = 'Player, t.School, Saves, [save percent]'
-        where = f"\n WHERE Saves is not  ' ' "
-
-    query = f"SELECT {columns} {from_clause} {where} {group_by} {having} {order_by} {limit}"
-
-    return query
-
-
-def execute_sql(connection, cursor, sql):
-    result = cursor.execute(sql).fetchall()
-
-    return result
-
-
-def print_cmd_result(result):
-    for line in result:
-        new_line = []
-
-        for item in line:
-            if str(item).isnumeric() and float(item) > 0:
-                new_item = '{0:d}'.format(item)
-                new_item = new_item.ljust(4)
-            else:
-                new_item = str(item).ljust(30)
-            new_line.append(new_item)
-
-        print(' '.join(new_line))
-
-
-def plot_results(result, query_dict):
-    if query_dict['command'] == 'rank':
-        x_vals = [line[0] for line in result]
-        y_vals = [line[1] for line in result]
-
-    elif query_dict['command'] == 'team_points':
-        x_vals = [line[1] for line in result]
-        y_vals = [line[2] for line in result]
-
-
-    elif query_dict['command'] == 'player_points':
-        x_vals = [line[0] for line in result]
-        y_vals = [line[2] for line in result]
-
-    elif query_dict['command'] == 'saves':
-        x_vals = [line[0] for line in result]
-        y_vals = [line[3] for line in result]
-    else:
-        return
-
-    fig = go.Figure(go.Bar(x=x_vals, y=y_vals))
-    fig.show()
-
-
-def process_command(command):
-    conn = sqlite3.connect('womenslax.sqlite')
-    cur = conn.cursor()
-
-    query_dict = parse_query_params(command)
-
-    if query_dict:
-        sql = build_sql_from_dict(query_dict)
-        result = execute_sql(connection=conn, cursor=cur, sql=sql)
-
-    else:
-        return None
-
-    if query_dict['plot']:
-        plot_results(result, query_dict)
-
-    else:
-        print_cmd_result(result)
-
-    return result
-
-
-def interactive_prompt():
-    response = ''
-
-    while response != 'exit':
-        response = input('Enter on of the following commands:'
-                         '\nrank'
-                         '\nteam_points'
-                         '\nplayer_points'
-                         '\nsaves'
-                         '\nEnter a command: ').lower().strip()
-
-        if response == 'exit':
-            continue
-
-        elif response.split(' ')[0] in ('rank', 'team_points', 'player_points', 'saves'):
-            process_command(command=response)
-        else:
-            print('Sorry your command is not recognized')
-
-
-if __name__ == '__main__':
-    init_data(get_team_data(), merge_lists())
-    interactive_prompt()
 
 
 
