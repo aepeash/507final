@@ -1,8 +1,8 @@
 import json
 import sqlite3
-from itertools import count
+
 import plotly.graph_objects as go
-import pandas as pd
+
 
 from bs4 import BeautifulSoup
 import requests
