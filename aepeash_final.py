@@ -44,11 +44,6 @@ def parse_query_params(command):
 
     return query_dict
 
-def convert_to_number(connection, cursor, sql):
-    connection = sqlite3.connect(DBNAME)
-    all_results = connection.cursor()
-    pass
-
 
 def build_sql_from_dict(query_dict):
     columns = ''
