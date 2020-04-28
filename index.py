@@ -9,6 +9,7 @@ def interactive_prompt():
     response = ''
 
     while response != 'exit':
+
         response = input("Enter 'interact' to work with the current data"
                          "\nor enter 'refresh' to refresh the database"
                          "\ntype 'exit' to leave the program: "
